@@ -1,5 +1,7 @@
 #!/bin/ash
 
+#####zerri modified#####
+
 ##### Functions #####
 Initialise(){
    lan_ip="$(hostname -i)"
@@ -33,6 +35,7 @@ Initialise(){
       echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     Interactive only mode set, bypassing 2FA cookie generation"
    fi
    if [ "${notification_type}" ] && [ "${interactive_session}" = "False" ]; then
+      echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     webhook_groupid: ${webhook_groupid}"
       ConfigureNotifications
    fi
    if [ ! -d "/home/${user}/.local/share/" ]; then mkdir --parents "/home/${user}/.local/share/"; fi
@@ -41,10 +44,11 @@ Initialise(){
 }
 
 ConfigureNotifications(){
-   if [ -z "${prowl_api_key}" ] && [ -z "${pushbullet_api_key}" ] && [ -z "${telegram_token}" ] && [ -z "${webhook_id}" ]; then
-      echo "$(date '+%Y-%m-%d %H:%M:%S') WARNING  ${notification_type} notifications enabled, but API key/token not set - disabling notifications"
-      unset notification_type
-   else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     Notification type: ${notification_type}, webhook groupid: ${webhook_groupid}"    
+#   if [ "${prowl_api_key}" = "" ] && [ "${pushbullet_api_key}" = "" ] && [ "${telegram_token}" = "" ] && [ "${webhook_groupid}" = "" ]; then
+#      echo "$(date '+%Y-%m-%d %H:%M:%S') WARNING  ${notification_type} notifications enabled, but API key/token not set - disabling notifications"
+#      unset notification_type
+#   else
       if [ "${notification_type}" = "Prowl" ] && [ "${prowl_api_key}" ]; then
          echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     ${notification_type} notifications enabled"
          echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     Notification period: ${notification_days=7}"
@@ -63,21 +67,21 @@ ConfigureNotifications(){
          echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     ${notification_type} notification URL: ${notification_url}"
          telegram_text="$(echo -e "\xE2\x84\xB9 *boredazfcuk/iCloudPD*\niCloud\_Photos\_Downloader container started for Apple ID ${apple_id}")"
          Notify "startup" "${telegram_text}"
-      elif [ "${notification_type}" = "Webhook" ] && [ "${webhook_server}" ] && [ "${webhook_id}" ]; then
+      elif [ "${notification_type}" = "Webhook" ] && [ "${webhook_server}" ] && [ "${webhook_groupid}" ]; then
          if [ "${webhook_https}" = "True" ]; then webhook_scheme="https"; else webhook_scheme="http"; fi
          echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     ${notification_type} notifications enabled"
          echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     ${notification_type} server: ${webhook_server}"
          echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     ${notification_type} port: ${webhook_port:=8123}"
-         echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     ${notification_type} ID: ${webhook_id}"
-         notification_url="${webhook_scheme}://${webhook_server}:${webhook_port}/api/webhook/${webhook_id}"
+         echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     ${notification_type} group ID: ${webhook_groupid}"
+         notification_url="${webhook_scheme}://${webhook_server}:${webhook_port}/send_group_msg"
          echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     ${notification_type} notification URL: ${notification_url}"
          webhook_payload="$(echo -e "boredazfcuk/iCloudPD - iCloud\_Photos\_Downloader container started for Apple ID ${apple_id}")"
-         Notify "startup" "${webhook_payload}"
+         Notify "startup" "${webhook_payload}" "${webhook_groupid}"
       else
          echo "$(date '+%Y-%m-%d %H:%M:%S') WARINING ${notification_type} notifications enabled, but configured incorrectly - disabling notifications"
          unset notification_type prowl_api_key pushbullet_api_key telegram_token telegram_chat_id webhook_scheme webhook_server webhook_port webhook_id
       fi
-   fi
+#   fi
 }
 
 CreateGroup(){
@@ -221,7 +225,7 @@ Display2FAExpiry(){
                next_notification_time="$(date +%s -d "+24 hour")"
             elif [ "${notification_type}" = "Webhook" ] && [ "${webhook_server}" ] && [ "${webhook_id}" ]; then
                webhook_payload="$(echo -e "boredazfcuk/iCloudPD - Final day before two factor authentication cookie expires for Apple ID: ${apple_id} - Please reinitialise now. This is your last reminder")"
-               Notify "failure" "${webhook_payload}"
+               Notify "failure" "${webhook_payload}" "${webhook_groupid}"
                next_notification_time="$(date +%s -d "+24 hour")"
             fi
          else
@@ -235,7 +239,7 @@ Display2FAExpiry(){
                next_notification_time="$(date +%s -d "+24 hour")"
             elif [ "${notification_type}" = "Webhook" ] && [ "${webhook_server}" ] && [ "${webhook_id}" ]; then
                webhook_payload="$(echo -e "boredazfcuk/iCloudPD - Only ${days_remaining} days until two factor authentication cookie expires for Apple ID: ${apple_id} - Please reinitialise")"
-               Notify "failure" "${webhook_payload}"
+               Notify "failure" "${webhook_payload}" "${webhook_groupid}"
                next_notification_time="$(date +%s -d "+24 hour")"
             fi
          fi
@@ -262,7 +266,7 @@ CheckFiles(){
          Notify "failure" "${telegram_text}"
       elif [ "${notification_type}" = "Webhook" ] && [ "${webhook_server}" ] && [ "${webhook_id}" ]; then
          webhook_payload="$(echo -e "boredazfcuk/iCloudPD - iCloudPD failed to download new files for Apple ID: ${apple_id} Exit code ${check_exit_code}")"
-         Notify "failure" "${webhook_payload}"
+         Notify "failure" "${webhook_payload}" "${webhook_groupid}"
       fi
    else
       echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     Check successful"
@@ -304,7 +308,7 @@ DownloadedFilesNotification(){
          new_files_preview="$(echo "${new_files}" | awk '{print $5}' | sed -e "s%/home/${user}/iCloud/%%g" | tail -10)"
          new_files_preview_count="$(echo "${new_files_preview}" | wc -l)"
          webhook_payload="$(echo -e "boredazfcuk/iCloudPD - New files detected for Apple ID ${apple_id}: ${new_files_count} Last ${new_files_preview_count} file names: ${new_files_preview//_/\\_}")"
-         Notify "failure" "${webhook_payload}"
+         Notify "failure" "${webhook_payload}" "${webhook_groupid}"
       fi
    fi
 }
@@ -326,7 +330,7 @@ DeletedFilesNotification(){
          deleted_files_preview="$(echo "${deleted_files}" | awk '{print $5}' | sed -e "s%/home/${user}/iCloud/%%g" -e "s%!$%%g" | tail -10)"
          deleted_files_preview_count="$(echo "${deleted_files_preview}" | wc -l)"
          webhook_payload="$(echo -e "boredazfcuk/iCloudPD - Deleted files detected for Apple ID: ${apple_id}: ${deleted_files_count} Last ${deleted_files_preview_count} file names: ${deleted_files_preview//_/\\_}")"
-         Notify "failure" "${webhook_payload}"
+         Notify "failure" "${webhook_payload}" "${webhook_groupid}"
       fi
    fi
 }
@@ -385,8 +389,8 @@ Notify(){
    elif [ "${notification_type}" = "Webhook" ]; then
       echo "$(date '+%Y-%m-%d %H:%M:%S') INFO     Sending ${notification_type} ${1} notification"
       curl --silent --request POST "${notification_url}" \
-         --header 'content-type: application/json' \
-         --data "{ \"data\" : \"${2}\" }" \
+         --header 'content-type: application/x-www-form-urlencoded' \
+         --data "message=${2}&group_id=${3}" \
          >/dev/null 2>&1
          curl_exit_code=$?
       if [ "${curl_exit_code}" -eq 0 ]; then 
@@ -432,7 +436,7 @@ SyncUser(){
                   Notify "failure" "${telegram_text}"
                elif [ "${notification_type}" = "Webhook" ] && [ "${webhook_server}" ] && [ "${webhook_id}" ]; then
                   webhook_payload="$(echo -e "boredazfcuk/iCloudPD - iCloudPD failed to download new files for Apple ID ${apple_id} - Exit code ${download_exit_code}")"
-                  Notify "failure" "${webhook_payload}"
+                  Notify "failure" "${webhook_payload}" "${webhook_groupid}"
                fi
             else
                DownloadedFilesNotification
